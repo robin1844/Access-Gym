@@ -446,11 +446,13 @@ const RT_KEYS = Object.keys(RT_META);
 // than one is on, so they are not ambiguous.
 function rtEnabledCount() { let n = 0; for (const k of RT_KEYS) if (rtPrefs[k]) n++; return n; }
 function rtPhrase(k, band) { return rtEnabledCount() > 1 ? `${RT_META[k].name} ${band}` : `${band}`; }
-const RT_DWELL_MS = 1500;
+// Dwell is kept below the ~1 Hz FTMS packet interval so that a single
+// confirmation packet is enough to trigger the announcement.
+const RT_DWELL_MS = 800;
 let rtState = {};
 function resetRealtime() {
   rtState = {};
-  for (const k of RT_KEYS) rtState[k] = { last: null, pendBand: null, pendSince: 0 };
+  for (const k of RT_KEYS) rtState[k] = { last: null, pendBand: null, pendSince: 0, sawLast: false };
 }
 function checkRealtime() {
   if (!latest.connected) return;
@@ -462,8 +464,19 @@ function checkRealtime() {
     const step = RT_META[k].step;
     const band = Math.round(v / step) * step;
     const st = rtState[k];
-    if (st.last === null) { st.last = band; st.pendBand = null; continue; }  // baseline, silent
-    if (band === st.last) { st.pendBand = null; continue; }                  // holding, quiet
+    if (st.last === null) { st.last = band; st.pendBand = null; st.sawLast = false; continue; }  // baseline, silent
+
+    if (band === st.last) {
+      // Back in the old band. Ignore a single bounce — only cancel the pending
+      // band if we see the old band on two packets in a row.
+      if (st.pendBand !== null) {
+        if (st.sawLast) { st.pendBand = null; st.sawLast = false; }  // genuinely returned
+        else             { st.sawLast = true; }                       // first bounce, keep timer
+      }
+      continue;
+    }
+
+    st.sawLast = false;
     if (st.pendBand === band) {
       if (now - st.pendSince >= RT_DWELL_MS) {                               // settled in new band
         st.last = band; st.pendBand = null;
