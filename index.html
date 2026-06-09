@@ -258,15 +258,15 @@
 </header>
 
 <main>
-  <section aria-labelledby="ls">
-    <h2 id="ls">Live stats</h2>
+  <section>
+    <h2>Live stats</h2>
     <p id="empty">No data yet. Connect and pedal.</p>
     <dl id="metrics" class="metrics"></dl>
   </section>
 
-  <section aria-labelledby="wk">
-    <h2 id="wk">Workout session</h2>
-    <div id="workout-clock" class="workout-clock inactive" aria-live="off" aria-label="Elapsed workout time">0:00</div>
+  <section>
+    <h2>Workout session</h2>
+    <div id="workout-clock" class="workout-clock inactive">0:00</div>
     <div class="row">
       <button id="workout-start">Start workout</button>
       <button id="workout-stop" disabled>End workout</button>
@@ -289,14 +289,14 @@
     </div>
   </section>
 
-  <section aria-labelledby="pb">
-    <h2 id="pb">Personal bests</h2>
+  <section>
+    <h2>Personal bests</h2>
     <dl id="pb-list" class="metrics"></dl>
     <div class="row"><button id="pb-reset">Reset personal bests to defaults</button></div>
   </section>
 
-  <section aria-labelledby="c">
-    <h2 id="c">Connection</h2>
+  <section>
+    <h2>Connection</h2>
     <p id="status" role="status" aria-live="polite" aria-atomic="true">Not connected. Tap Connect, then pick your machine.</p>
     <div class="row">
       <button id="connect">Connect to machine</button>
@@ -313,8 +313,8 @@
   <details id="settings-panel">
     <summary>Settings</summary>
 
-    <section aria-labelledby="su">
-      <h2 id="su">Spoken updates</h2>
+    <section>
+      <h2>Spoken updates</h2>
       <div class="field">
         <label for="interval">Speak a summary every</label>
         <select id="interval">
@@ -336,8 +336,8 @@
       <div class="row"><button id="speaknow">Speak current stats now</button></div>
     </section>
 
-    <section aria-labelledby="rt">
-      <h2 id="rt">Real-time alerts</h2>
+    <section>
+      <h2>Real-time alerts</h2>
       <p class="hint">Speaks a value the moment it settles into a new band, then stays quiet while you hold it. Good for spin: when the instructor calls a cadence, adjust until you hear it. Tick a stat to turn its alert on. Bands: cadence and heart rate to the nearest 5, speed to the nearest 5, power to the nearest 25.</p>
       <fieldset>
         <legend>Announce immediately when these change band</legend>
@@ -345,8 +345,8 @@
       </fieldset>
     </section>
 
-    <section aria-labelledby="un">
-      <h2 id="un">Units</h2>
+    <section>
+      <h2>Units</h2>
       <fieldset>
         <legend>Distance units</legend>
         <div class="check"><input type="radio" name="units" id="u-km" value="km" checked /><label for="u-km">Kilometres</label></div>
