@@ -161,14 +161,14 @@
     padding: 1rem 1.1rem;
     box-shadow: var(--shadow);
   }
-  .metric dt {
+  .metric-label {
     font-size: .75rem;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: .08em;
     color: var(--muted);
   }
-  .metric dd {
+  .metric-value {
     margin: .15rem 0 0;
     font-size: 2.1rem;
     font-weight: 800;
@@ -261,7 +261,7 @@
   <section>
     <h2>Live stats</h2>
     <p id="empty">No data yet. Connect and pedal.</p>
-    <dl id="metrics" class="metrics"></dl>
+    <div id="metrics" class="metrics"></div>
   </section>
 
   <section>
@@ -275,12 +275,12 @@
     <div id="workout-summary" hidden>
       <div class="summary-card">
         <h3>Session summary</h3>
-        <dl class="metrics">
-          <div class="metric"><dt>Time</dt><dd id="ws-duration">—</dd></div>
-          <div class="metric"><dt>Distance</dt><dd id="ws-distance">—</dd></div>
-          <div class="metric"><dt>Calories</dt><dd id="ws-calories">—</dd></div>
-          <div class="metric"><dt>Avg power</dt><dd id="ws-power">—</dd></div>
-        </dl>
+        <div class="metrics">
+          <div class="metric"><div class="metric-label">Time</div><div class="metric-value" id="ws-duration">—</div></div>
+          <div class="metric"><div class="metric-label">Distance</div><div class="metric-value" id="ws-distance">—</div></div>
+          <div class="metric"><div class="metric-label">Calories</div><div class="metric-value" id="ws-calories">—</div></div>
+          <div class="metric"><div class="metric-label">Avg power</div><div class="metric-value" id="ws-power">—</div></div>
+        </div>
       </div>
       <div class="row">
         <button id="export-health">Send to Apple Health</button>
@@ -291,7 +291,7 @@
 
   <section>
     <h2>Personal bests</h2>
-    <dl id="pb-list" class="metrics"></dl>
+    <div id="pb-list" class="metrics"></div>
     <div class="row"><button id="pb-reset">Reset personal bests to defaults</button></div>
   </section>
 
@@ -465,8 +465,8 @@ function renderMetrics() {
   list.innerHTML = "";
   for (const [label, val] of rows) {
     const w = document.createElement("div"); w.className = "metric";
-    const dt = document.createElement("dt"); dt.textContent = label;
-    const dd = document.createElement("dd"); dd.textContent = val;
+    const dt = document.createElement("div"); dt.className = "metric-label"; dt.textContent = label;
+    const dd = document.createElement("div"); dd.className = "metric-value"; dd.textContent = val;
     w.append(dt, dd); list.append(w);
   }
 }
@@ -625,8 +625,8 @@ function renderPersonalBests() {
   list.innerHTML = "";
   for (const m of PB_METRICS) {
     const w = document.createElement("div"); w.className = "metric";
-    const dt = document.createElement("dt"); dt.textContent = m.label;
-    const dd = document.createElement("dd"); dd.textContent = pbDisplay(m.key, pb[m.key]);
+    const dt = document.createElement("div"); dt.className = "metric-label"; dt.textContent = m.label;
+    const dd = document.createElement("div"); dd.className = "metric-value"; dd.textContent = pbDisplay(m.key, pb[m.key]);
     w.append(dt, dd); list.append(w);
   }
 }
