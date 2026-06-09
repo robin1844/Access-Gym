@@ -217,6 +217,36 @@
   /* ── Status message ──────────────────────────────────────────────── */
   #status { font-size: .95rem; color: var(--muted); margin: .4rem 0 1rem; }
 
+  /* ── Workout clock ───────────────────────────────────────────────── */
+  .workout-clock {
+    font-size: 3.5rem;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -.03em;
+    color: var(--accent);
+    line-height: 1;
+    margin: .5rem 0 1rem;
+  }
+  .workout-clock.inactive { color: var(--muted); }
+
+  /* ── Workout summary card ────────────────────────────────────────── */
+  .summary-card {
+    background: var(--card);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.1rem 1.25rem;
+    box-shadow: var(--shadow);
+    margin: 1rem 0;
+  }
+  .summary-card h3 {
+    font-size: .8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    color: var(--muted);
+    margin: 0 0 .9rem;
+  }
+
   /* ── Visually hidden (screen-reader only) ────────────────────────── */
   .vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 </style>
@@ -232,6 +262,31 @@
     <h2 id="ls">Live stats</h2>
     <p id="empty">No data yet. Connect and pedal.</p>
     <dl id="metrics" class="metrics"></dl>
+  </section>
+
+  <section aria-labelledby="wk">
+    <h2 id="wk">Workout session</h2>
+    <div id="workout-clock" class="workout-clock inactive" aria-live="off" aria-label="Elapsed workout time">0:00</div>
+    <div class="row">
+      <button id="workout-start">Start workout</button>
+      <button id="workout-stop" disabled>End workout</button>
+    </div>
+
+    <div id="workout-summary" hidden>
+      <div class="summary-card">
+        <h3>Session summary</h3>
+        <dl class="metrics">
+          <div class="metric"><dt>Time</dt><dd id="ws-duration">—</dd></div>
+          <div class="metric"><dt>Distance</dt><dd id="ws-distance">—</dd></div>
+          <div class="metric"><dt>Calories</dt><dd id="ws-calories">—</dd></div>
+          <div class="metric"><dt>Avg power</dt><dd id="ws-power">—</dd></div>
+        </dl>
+      </div>
+      <div class="row">
+        <button id="export-health">Send to Apple Health</button>
+      </div>
+      <p class="hint">Opens the Shortcuts app. You need a shortcut named <strong>Log Cycling Workout</strong> set up on your iPhone first.</p>
+    </div>
   </section>
 
   <section aria-labelledby="pb">
@@ -327,6 +382,12 @@ let latest = { connected: false, speed_kmh: 0, cadence_rpm: 0, power_w: 0, heart
 let device = null, char = null;
 let lastT = null, movingS = 0;
 let announceTimer = null, lastMilestone = 0;
+
+// Workout session
+let workoutActive = false;
+let workoutStartTime = null;
+let workoutClockTimer = null;
+let powerSum = 0, powerCount = 0;
 
 /* ---------- preferences ---------- */
 function getUnits() { return localStorage.getItem("units") || "km"; }
@@ -575,6 +636,70 @@ function resetPersonalBests() {
   speak("Personal bests reset to the default starting values.");
 }
 
+/* ---------- workout session ---------- */
+function workoutClockTick() {
+  if (!workoutStartTime) return;
+  const elapsed = Math.floor((Date.now() - workoutStartTime) / 1000);
+  const m = Math.floor(elapsed / 60), s = elapsed % 60;
+  $("workout-clock").textContent = `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+function startWorkout() {
+  workoutActive = true;
+  workoutStartTime = Date.now();
+  powerSum = 0; powerCount = 0;
+  resetSession();
+  $("workout-clock").classList.remove("inactive");
+  $("workout-start").disabled = true;
+  $("workout-stop").disabled = false;
+  $("workout-summary").hidden = true;
+  workoutClockTick();
+  workoutClockTimer = setInterval(workoutClockTick, 1000);
+  speak("Workout started.");
+}
+
+function stopWorkout() {
+  workoutActive = false;
+  clearInterval(workoutClockTimer);
+  $("workout-start").disabled = false;
+  $("workout-stop").disabled = true;
+  $("workout-clock").classList.add("inactive");
+
+  const durationS = Math.floor((Date.now() - workoutStartTime) / 1000);
+  const avgPower   = powerCount > 0 ? Math.round(powerSum / powerCount) : 0;
+
+  // Populate summary display
+  $("ws-duration").textContent = fmtTime(durationS);
+  $("ws-distance").textContent = fmtDistance();
+  $("ws-calories").textContent = Math.round(latest.calories_est);
+  $("ws-power").textContent    = avgPower > 0 ? `${avgPower} W` : "—";
+  $("workout-summary").hidden  = false;
+
+  // Stash data for export
+  const el = $("workout-summary");
+  el.dataset.duration   = durationS;
+  el.dataset.calories   = Math.round(latest.calories_est);
+  el.dataset.distanceKm = (latest.distance_m / 1000).toFixed(3);
+  el.dataset.avgPower   = avgPower;
+  el.dataset.startIso   = new Date(workoutStartTime).toISOString();
+
+  speak(`Workout ended. ${fmtTime(durationS)}, ${fmtDistance()}, ${Math.round(latest.calories_est)} calories.`);
+}
+
+function exportToHealth() {
+  const d = $("workout-summary").dataset;
+  const payload = JSON.stringify({
+    duration:   parseInt(d.duration),
+    calories:   parseInt(d.calories),
+    distanceKm: parseFloat(d.distanceKm),
+    avgPower:   parseInt(d.avgPower),
+    startTime:  d.startIso,
+  });
+  window.location.href =
+    "shortcuts://run-shortcut?name=Log%20Cycling%20Workout" +
+    "&input=text&text=" + encodeURIComponent(payload);
+}
+
 /* ---------- Bluetooth ---------- */
 function parseBike(dv) {
   const flags = dv.getUint16(0, true); let o = 2; const out = {};
@@ -608,6 +733,7 @@ function onData(e) {
   if ("energy_kcal" in m) latest.calories_est = m.energy_kcal;
   else if (dt > 0 && dt < 5) latest.calories_est += (latest.power_w * dt) / 4184 / 0.24;
   if (dt > 0 && dt < 5 && latest.speed_kmh > 0) { movingS += dt; latest.elapsed_s = Math.floor(movingS); }
+  if (workoutActive && latest.power_w > 0) { powerSum += latest.power_w; powerCount++; }
   renderMetrics();
   updateSessionBests();
   checkRealtime();
@@ -773,6 +899,10 @@ function init() {
     localStorage.setItem("announceInterval", $("interval").value);
     startTimer();
   });
+
+  $("workout-start").addEventListener("click", startWorkout);
+  $("workout-stop").addEventListener("click", stopWorkout);
+  $("export-health").addEventListener("click", exportToHealth);
 
   $("connect").addEventListener("click", connect);
   $("disconnect").addEventListener("click", disconnect);
