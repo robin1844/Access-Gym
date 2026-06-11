@@ -784,12 +784,14 @@ async function tryAutoReconnect() {
   if (!navigator.bluetooth) return;
   if (!navigator.bluetooth.getDevices) {
     setStatus("Auto-connect not available in this browser. Tap Connect to connect manually.");
+    $("connect").focus();
     return;
   }
   try {
     const devices = await navigator.bluetooth.getDevices();
     if (!devices.length) {
-      setStatus("No remembered machine. Tap Connect and pick your bike — future visits should connect automatically.");
+      setStatus("No remembered machine. Tap Connect and pick your bike.");
+      $("connect").focus();
       return;
     }
     const remembered = devices[0];
@@ -819,6 +821,7 @@ async function tryAutoReconnect() {
     // supports it.
     device = null;
     setStatus(`Last machine: ${remembered.name || "your machine"}. Tap Connect to reconnect.`);
+    $("connect").focus();
     try {
       remembered.addEventListener("advertisementreceived", async () => {
         if (device && device.gatt.connected) return;
@@ -836,7 +839,14 @@ async function connect() {
   if (!navigator.bluetooth) { $("unsupported").hidden = false; setStatus("No Bluetooth in this browser. Use a Web BLE browser."); return; }
   try {
     setStatus("Opening the chooser. Make sure you are pedalling, then pick your machine.");
-    device = await navigator.bluetooth.requestDevice({ filters: [{ services: [FTMS] }, { namePrefix: "Sport01" }], optionalServices: [FTMS] });
+    // If we have connected before, use the exact saved name as the first filter
+    // so the picker shows only that device rather than all FTMS devices.
+    const savedName = localStorage.getItem("lastDeviceName");
+    const filters = savedName
+      ? [{ name: savedName }, { services: [FTMS] }, { namePrefix: "Sport01" }]
+      : [{ services: [FTMS] }, { namePrefix: "Sport01" }];
+    device = await navigator.bluetooth.requestDevice({ filters, optionalServices: [FTMS] });
+    localStorage.setItem("lastDeviceName", device.name || "");
     device.addEventListener("gattserverdisconnected", onDisconnected);
     setStatus(`Connecting to ${device.name || "machine"}...`);
     const server = await device.gatt.connect();
