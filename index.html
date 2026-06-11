@@ -177,23 +177,6 @@
     font-variant-numeric: tabular-nums;
   }
 
-  /* ── Export link styled as button ───────────────────────────────── */
-  a[role=button] {
-    display: inline-flex;
-    align-items: center;
-    font: inherit;
-    font-weight: 700;
-    min-height: 3rem;
-    padding: .6rem 1.3rem;
-    border-radius: var(--radius);
-    background: var(--accent);
-    color: var(--accent-fg);
-    text-decoration: none;
-    box-shadow: var(--shadow);
-    cursor: pointer;
-  }
-  a[role=button]:not([href]) { opacity: .38; pointer-events: none; }
-
   /* ── Details / summary ───────────────────────────────────────────── */
   details { margin: 1rem 0; }
   summary {
@@ -300,7 +283,7 @@
         </div>
       </div>
       <div class="row">
-        <a id="export-health" role="button">Send to Apple Health</a>
+        <button id="export-health">Send to Apple Health</button>
       </div>
       <p class="hint">Opens the Shortcuts app. You need a shortcut named <strong>Log Cycling Workout</strong> set up on your iPhone first.</p>
     </div>
@@ -374,6 +357,7 @@
   </details>
 
   <p id="spoken" class="vh" aria-live="assertive" aria-atomic="true"></p>
+  <p id="rt-alert" class="vh" role="alert"></p>
 </main>
 
 <footer></footer>
@@ -405,6 +389,7 @@ let workoutActive = false;
 let workoutStartTime = null;
 let workoutClockTimer = null;
 let powerSum = 0, powerCount = 0;
+let lastWorkoutPayload = null;
 
 /* ---------- preferences ---------- */
 function getUnits() { return localStorage.getItem("units") || "km"; }
@@ -424,6 +409,13 @@ function saveRT() { localStorage.setItem("rtAlerts", JSON.stringify(rtPrefs)); }
 function speak(text) {
   if (!text) return;
   const r = $("spoken");
+  r.textContent = "";
+  requestAnimationFrame(() => { r.textContent = text; });
+}
+// Band alerts use role="alert" for the most aggressive VoiceOver interruption
+function speakAlert(text) {
+  if (!text) return;
+  const r = $("rt-alert");
   r.textContent = "";
   requestAnimationFrame(() => { r.textContent = text; });
 }
@@ -457,15 +449,15 @@ function valueFor(key) {
 function spokenFor(key) {
   const mi = getUnits() === "mi";
   switch (key) {
-    case "speed": return mi ? `speed ${(latest.speed_kmh * 0.621371).toFixed(1)} miles per hour`
-                            : `speed ${latest.speed_kmh.toFixed(1)} kilometres per hour`;
-    case "cadence": return `cadence ${Math.round(latest.cadence_rpm)}`;
-    case "power": return `power ${latest.power_w} watts`;
-    case "distance": return mi ? `distance ${(latest.distance_m / 1609.34).toFixed(2)} miles`
-                               : `distance ${(latest.distance_m / 1000).toFixed(2)} kilometres`;
+    case "speed": return mi ? `${(latest.speed_kmh * 0.621371).toFixed(1)} miles per hour`
+                            : `${latest.speed_kmh.toFixed(1)} kilometres per hour`;
+    case "cadence": return `${Math.round(latest.cadence_rpm)} rpm`;
+    case "power": return `${latest.power_w} watts`;
+    case "distance": return mi ? `${(latest.distance_m / 1609.34).toFixed(2)} miles`
+                               : `${(latest.distance_m / 1000).toFixed(2)} kilometres`;
     case "calories": return `${Math.round(latest.calories_est)} calories`;
-    case "elapsed": return `time ${fmtTime(latest.elapsed_s)}`;
-    case "heart_rate": return `heart rate ${latest.heart_rate}`;
+    case "elapsed": return fmtTime(latest.elapsed_s);
+    case "heart_rate": return `${latest.heart_rate} bpm`;
   }
   return "";
 }
@@ -558,7 +550,7 @@ function checkRealtime() {
     if (st.pendBand === band) {
       if (now - st.pendSince >= RT_DWELL_MS) {                               // settled in new band
         st.last = band; st.pendBand = null;
-        speak(rtPhrase(k, band));
+        speakAlert(rtPhrase(k, band));
       }
     } else { st.pendBand = band; st.pendSince = now; }                       // entered a new band, start settle timer
   }
@@ -692,20 +684,31 @@ function stopWorkout() {
   $("ws-power").textContent    = avgPower > 0 ? `${avgPower} W` : "—";
   $("workout-summary").hidden  = false;
 
-  // Build the Shortcuts URL and set it directly as the link href.
-  // Using a real <a> tap is more reliable than window.location in WebBLE.
-  const payload = JSON.stringify({
+  lastWorkoutPayload = JSON.stringify({
     duration:   durationS,
     calories:   Math.round(latest.calories_est),
     distanceKm: parseFloat((latest.distance_m / 1000).toFixed(3)),
     avgPower:   avgPower,
     startTime:  new Date(workoutStartTime).toISOString(),
   });
-  $("export-health").href =
-    "shortcuts://run-shortcut?name=Log%20Cycling%20Workout" +
-    "&input=text&text=" + encodeURIComponent(payload);
 
   speak(`Workout ended. ${fmtTime(durationS)}, ${fmtDistance()}, ${Math.round(latest.calories_est)} calories.`);
+}
+
+async function exportToHealth() {
+  if (!lastWorkoutPayload) return;
+  if (navigator.share) {
+    try {
+      await navigator.share({ text: lastWorkoutPayload, title: "Log Cycling Workout" });
+    } catch (e) { /* user dismissed share sheet — that's fine */ }
+  } else {
+    try {
+      await navigator.clipboard.writeText(lastWorkoutPayload);
+      speak("Workout data copied. Open Shortcuts and run Log Cycling Workout.");
+    } catch (e) {
+      speak("Sharing is not available on this device.");
+    }
+  }
 }
 
 /* ---------- Bluetooth ---------- */
@@ -927,6 +930,7 @@ function init() {
 
   $("workout-start").addEventListener("click", startWorkout);
   $("workout-stop").addEventListener("click", stopWorkout);
+  $("export-health").addEventListener("click", exportToHealth);
 
   $("connect").addEventListener("click", connect);
   $("disconnect").addEventListener("click", disconnect);
