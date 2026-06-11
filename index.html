@@ -177,6 +177,23 @@
     font-variant-numeric: tabular-nums;
   }
 
+  /* ── Export link styled as button ───────────────────────────────── */
+  a[role=button] {
+    display: inline-flex;
+    align-items: center;
+    font: inherit;
+    font-weight: 700;
+    min-height: 3rem;
+    padding: .6rem 1.3rem;
+    border-radius: var(--radius);
+    background: var(--accent);
+    color: var(--accent-fg);
+    text-decoration: none;
+    box-shadow: var(--shadow);
+    cursor: pointer;
+  }
+  a[role=button]:not([href]) { opacity: .38; pointer-events: none; }
+
   /* ── Details / summary ───────────────────────────────────────────── */
   details { margin: 1rem 0; }
   summary {
@@ -283,7 +300,7 @@
         </div>
       </div>
       <div class="row">
-        <button id="export-health">Send to Apple Health</button>
+        <a id="export-health" role="button">Send to Apple Health</a>
       </div>
       <p class="hint">Opens the Shortcuts app. You need a shortcut named <strong>Log Cycling Workout</strong> set up on your iPhone first.</p>
     </div>
@@ -675,29 +692,20 @@ function stopWorkout() {
   $("ws-power").textContent    = avgPower > 0 ? `${avgPower} W` : "—";
   $("workout-summary").hidden  = false;
 
-  // Stash data for export
-  const el = $("workout-summary");
-  el.dataset.duration   = durationS;
-  el.dataset.calories   = Math.round(latest.calories_est);
-  el.dataset.distanceKm = (latest.distance_m / 1000).toFixed(3);
-  el.dataset.avgPower   = avgPower;
-  el.dataset.startIso   = new Date(workoutStartTime).toISOString();
-
-  speak(`Workout ended. ${fmtTime(durationS)}, ${fmtDistance()}, ${Math.round(latest.calories_est)} calories.`);
-}
-
-function exportToHealth() {
-  const d = $("workout-summary").dataset;
+  // Build the Shortcuts URL and set it directly as the link href.
+  // Using a real <a> tap is more reliable than window.location in WebBLE.
   const payload = JSON.stringify({
-    duration:   parseInt(d.duration),
-    calories:   parseInt(d.calories),
-    distanceKm: parseFloat(d.distanceKm),
-    avgPower:   parseInt(d.avgPower),
-    startTime:  d.startIso,
+    duration:   durationS,
+    calories:   Math.round(latest.calories_est),
+    distanceKm: parseFloat((latest.distance_m / 1000).toFixed(3)),
+    avgPower:   avgPower,
+    startTime:  new Date(workoutStartTime).toISOString(),
   });
-  window.location.href =
+  $("export-health").href =
     "shortcuts://run-shortcut?name=Log%20Cycling%20Workout" +
     "&input=text&text=" + encodeURIComponent(payload);
+
+  speak(`Workout ended. ${fmtTime(durationS)}, ${fmtDistance()}, ${Math.round(latest.calories_est)} calories.`);
 }
 
 /* ---------- Bluetooth ---------- */
@@ -773,10 +781,17 @@ async function finishConnect(dev) {
 }
 
 async function tryAutoReconnect() {
-  if (!navigator.bluetooth || !navigator.bluetooth.getDevices) return;
+  if (!navigator.bluetooth) return;
+  if (!navigator.bluetooth.getDevices) {
+    setStatus("Auto-connect not available in this browser. Tap Connect to connect manually.");
+    return;
+  }
   try {
     const devices = await navigator.bluetooth.getDevices();
-    if (!devices.length) return;
+    if (!devices.length) {
+      setStatus("No remembered machine. Tap Connect and pick your bike — future visits should connect automatically.");
+      return;
+    }
     const remembered = devices[0];
     remembered.addEventListener("gattserverdisconnected", onDisconnected);
 
@@ -902,7 +917,6 @@ function init() {
 
   $("workout-start").addEventListener("click", startWorkout);
   $("workout-stop").addEventListener("click", stopWorkout);
-  $("export-health").addEventListener("click", exportToHealth);
 
   $("connect").addEventListener("click", connect);
   $("disconnect").addEventListener("click", disconnect);
